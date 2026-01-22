@@ -213,7 +213,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ada_type_definition",
-            description="Navigate to the type definition of a symbol (find where the type is defined, not just the variable)",
+            description="Navigate to a symbol's type definition (where the type is declared)",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -235,7 +235,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ada_implementation",
-            description="Navigate from a declaration to its implementation/body (e.g., from spec to body)",
+            description="Navigate from declaration to implementation (spec to body)",
             inputSchema={
                 "type": "object",
                 "properties": {
