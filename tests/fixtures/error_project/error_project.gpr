@@ -1,0 +1,5 @@
+project Error_Project is
+   for Source_Dirs use ("src");
+   for Object_Dir use "obj";
+   for Main use ("broken.adb");
+end Error_Project;
