@@ -118,6 +118,54 @@ ruff check src/
 mypy src/
 ```
 
+## Testing
+
+### Unit Tests (CI)
+
+Unit tests with mocked ALS run in GitHub Actions CI:
+
+```bash
+pytest tests/test_phase1_unit.py -v
+```
+
+These tests validate tool logic, input handling, and error cases without requiring the actual Ada Language Server.
+
+### Integration Tests (Local Only)
+
+Integration tests require the Ada Language Server binary and must be run locally:
+
+```bash
+# Set ALS path (or ensure it's in PATH)
+export ALS_PATH=/path/to/ada_language_server
+
+# Run integration tests
+python scripts/test_phase1_integration.py
+```
+
+**Why can't integration tests run in CI?**
+
+The Ada Language Server (ALS) is a compiled binary that requires:
+- The GNAT toolchain or pre-built binaries from AdaCore
+- Platform-specific executables (Linux/Windows/macOS)
+- Significant disk space and build time if compiling from source
+
+For full test coverage, run integration tests locally before pushing changes.
+
+## Continuous Integration
+
+GitHub Actions runs on every push and PR:
+
+| Job | Description |
+|-----|-------------|
+| **test** | Unit tests with mocked ALS |
+| **lint** | Code style (ruff check + format) |
+| **mypy** | Static type checking |
+
+**CI Limitations:**
+- ❌ Cannot test actual ALS communication
+- ❌ Cannot verify LSP protocol handling with real server
+- ✅ Validates code quality, imports, and mocked behavior
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
