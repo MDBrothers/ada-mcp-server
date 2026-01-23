@@ -136,6 +136,64 @@ class ALSHealthMonitor:
         logger.debug("ALS restart counter reset")
 
 
+async def get_alire_environment(project_root: Path) -> dict[str, str] | None:
+    """
+    Get environment variables from Alire for the project.
+
+    If the project has an alire.toml, runs 'alr printenv' to get the
+    environment that Alire sets up (toolchain paths, GPR_PROJECT_PATH, etc.)
+
+    Returns:
+        Environment dict if Alire project, None otherwise
+    """
+    alire_toml = project_root / "alire.toml"
+    if not alire_toml.exists():
+        return None
+
+    try:
+        # Run 'alr printenv --unix' to get environment in shell format
+        process = await asyncio.create_subprocess_exec(
+            "alr",
+            "printenv",
+            "--unix",
+            cwd=str(project_root),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
+
+        if process.returncode != 0:
+            logger.warning(f"alr printenv failed: {stderr.decode()}")
+            return None
+
+        # Parse the output: export VAR="value"
+        env = dict(os.environ)  # Start with current environment
+        for line in stdout.decode().splitlines():
+            line = line.strip()
+            if line.startswith("export "):
+                # Format: export VAR="value"
+                assignment = line[7:]  # Remove "export "
+                if "=" in assignment:
+                    key, value = assignment.split("=", 1)
+                    # Remove quotes if present
+                    value = value.strip('"').strip("'")
+                    env[key] = value
+                    logger.debug(f"Alire env: {key}={value[:50]}...")
+
+        logger.info("Loaded Alire environment for ALS")
+        return env
+
+    except FileNotFoundError:
+        logger.debug("Alire (alr) not found, skipping Alire environment")
+        return None
+    except TimeoutError:
+        logger.warning("alr printenv timed out")
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to get Alire environment: {e}")
+        return None
+
+
 async def find_gpr_file(project_root: Path) -> Path | None:
     """Find GPR file in project root, preferring alire-generated ones."""
     gpr_files = list(project_root.glob("*.gpr"))
@@ -187,13 +245,17 @@ async def start_als(
     if gpr_file:
         logger.info(f"GPR file: {gpr_file}")
 
-    # Spawn ALS process
+    # Get Alire environment if this is an Alire project
+    alire_env = await get_alire_environment(project_root)
+
+    # Spawn ALS process with Alire environment if available
     process = await asyncio.create_subprocess_exec(
         resolved_als_path,
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         cwd=str(project_root),
+        env=alire_env,  # None means inherit current env
     )
 
     client = ALSClient(process=process)
