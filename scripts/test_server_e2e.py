@@ -71,7 +71,7 @@ class MCPTestClient:
         while True:
             try:
                 message = await asyncio.wait_for(read_message(), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise TimeoutError(f"Timeout waiting for response to request {expected_id}")
 
             # Skip notifications (no id field)
@@ -99,6 +99,12 @@ async def run_tests() -> bool:
 
     print(f"\n[1] Starting server with: {venv_python} -m ada_mcp")
 
+    # Set up environment - use sample_project to avoid scanning the entire repo
+    # which can cause massive memory usage from .venv and other non-Ada directories
+    sample_project = project_root / "tests" / "fixtures" / "sample_project"
+    env = os.environ.copy()
+    env["ADA_PROJECT_ROOT"] = str(sample_project)
+
     # Start the server as a subprocess
     process = await asyncio.create_subprocess_exec(
         str(venv_python),
@@ -107,7 +113,8 @@ async def run_tests() -> bool:
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        cwd=str(project_root),
+        env=env,
+        cwd=str(sample_project),
     )
 
     client = MCPTestClient(process)
@@ -198,7 +205,7 @@ async def run_tests() -> bool:
             if content:
                 text = content[0].get("text", "")
                 if "error" in text.lower() or "unknown" in text.lower():
-                    print(f"    ✓ Unknown tool handled gracefully")
+                    print("    ✓ Unknown tool handled gracefully")
                     tests_passed += 1
                 else:
                     print(f"    ? Unexpected response: {text}")
@@ -226,7 +233,7 @@ async def run_tests() -> bool:
             try:
                 await asyncio.wait_for(process.wait(), timeout=3.0)
                 print("    ✓ Server terminated gracefully")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 print("    ! Server didn't terminate, killing...")
                 process.kill()
                 await process.wait()

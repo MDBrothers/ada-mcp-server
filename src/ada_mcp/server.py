@@ -11,7 +11,11 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from ada_mcp.als.client import ALSClient
-from ada_mcp.als.process import shutdown_als, start_als
+from ada_mcp.als.process import (
+    ALSHealthMonitor,
+    shutdown_als,
+    start_als_with_monitoring,
+)
 from ada_mcp.tools import (
     handle_diagnostics,
     handle_document_symbols,
@@ -45,14 +49,22 @@ logger = logging.getLogger(__name__)
 # Create the MCP server instance
 server = Server("ada-mcp-server")
 
-# Global ALS client (initialized on first use)
+# Global ALS client and health monitor (initialized on first use)
 _als_client: ALSClient | None = None
+_als_monitor: ALSHealthMonitor | None = None
 _als_lock = asyncio.Lock()
+
+
+def _on_als_restart(new_client: ALSClient) -> None:
+    """Callback when ALS is restarted by health monitor."""
+    global _als_client
+    _als_client = new_client
+    logger.info("ALS client reference updated after restart")
 
 
 async def get_als_client() -> ALSClient:
     """Get or create the ALS client instance."""
-    global _als_client
+    global _als_client, _als_monitor
 
     async with _als_lock:
         if _als_client is not None and _als_client.is_running:
@@ -69,7 +81,9 @@ async def get_als_client() -> ALSClient:
         logger.info(f"Initializing ALS for project: {project_root}")
 
         try:
-            _als_client = await start_als(project_root)
+            _als_client, _als_monitor = await start_als_with_monitoring(
+                project_root, on_restart=_on_als_restart
+            )
             # Give ALS time to index
             await asyncio.sleep(1.0)
             return _als_client
@@ -80,16 +94,17 @@ async def get_als_client() -> ALSClient:
 
 async def shutdown_als_client() -> None:
     """Shutdown the ALS client if running."""
-    global _als_client
+    global _als_client, _als_monitor
 
     async with _als_lock:
         if _als_client is not None:
             try:
-                await shutdown_als(_als_client)
+                await shutdown_als(_als_client, _als_monitor)
             except Exception as e:
                 logger.warning(f"Error shutting down ALS: {e}")
             finally:
                 _als_client = None
+                _als_monitor = None
 
 
 @server.list_tools()

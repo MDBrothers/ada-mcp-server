@@ -1,0 +1,7 @@
+{
+    "$schema": "https://raw.githubusercontent.com/AdaCore/ada_language_server/master/integration/vscode/ada/schemas/als-settings-schema.json",
+    "enableIndexing": false,
+    "adaFileDiagnostics": false,
+    "projectDiagnostics": false,
+    "sourceInfoDiagnostics": false
+}

@@ -52,6 +52,17 @@ packages = ["src/ada_mcp"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Exclude directories that shouldn't be analyzed
+exclude = [
+    ".venv",
+    "venv",
+    ".git",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "*.egg-info",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
@@ -66,3 +77,9 @@ markers = [
 [tool.mypy]
 python_version = "3.11"
 strict = true
+# Exclude venv and cache directories
+exclude = [
+    "^\\.venv/",
+    "^venv/",
+    "^__pycache__/",
+]

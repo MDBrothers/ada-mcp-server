@@ -8,6 +8,11 @@
 		"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
 		"python.analysis.typeCheckingMode": "standard",
 		"python.analysis.autoImportCompletions": true,
+		"python.analysis.exclude": [
+			".venv",
+			"**/__pycache__",
+			"**/node_modules"
+		],
 		"python.testing.pytestEnabled": true,
 		"python.testing.pytestArgs": [
 			"tests"
@@ -20,21 +25,20 @@
 				"source.organizeImports": "explicit"
 			}
 		},
-		"ruff.lint.args": [
-			"--config",
-			"${workspaceFolder}/pyproject.toml"
-		],
 		"files.exclude": {
 			"**/__pycache__": true,
 			"**/*.egg-info": true,
 			".ruff_cache": true,
 			".mypy_cache": true,
-			".pytest_cache": true
+			".pytest_cache": true,
+			".venv": true
 		},
 		"search.exclude": {
 			"**/.venv": true,
 			"**/node_modules": true
-		}
+		},
+		"ada.projectFile": "",
+		"ada.enableIndexing": false
 	},
 	"extensions": {
 		"recommendations": [
