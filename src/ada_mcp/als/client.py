@@ -152,8 +152,19 @@ class ALSClient:
 
                 content_length = int(content_length_str)
 
-                # Read content
-                content = await self.process.stdout.read(content_length)
+                # Read content - may need multiple reads for large messages
+                content = b""
+                remaining = content_length
+                while remaining > 0:
+                    chunk = await self.process.stdout.read(remaining)
+                    if not chunk:
+                        logger.warning(
+                            f"Incomplete message: got {len(content)}, expected {content_length}"
+                        )
+                        break
+                    content += chunk
+                    remaining -= len(chunk)
+
                 if len(content) < content_length:
                     logger.warning(
                         f"Incomplete message: got {len(content)}, expected {content_length}"
