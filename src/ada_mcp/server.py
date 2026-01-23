@@ -13,6 +13,7 @@ from mcp.types import TextContent, Tool
 from ada_mcp.als.client import ALSClient
 from ada_mcp.als.process import (
     ALSHealthMonitor,
+    find_project_root,
     shutdown_als,
     start_als_with_monitoring,
 )
@@ -62,8 +63,15 @@ def _on_als_restart(new_client: ALSClient) -> None:
     logger.info("ALS client reference updated after restart")
 
 
-async def get_als_client() -> ALSClient:
-    """Get or create the ALS client instance."""
+async def get_als_client(file_path: str | None = None) -> ALSClient:
+    """
+    Get or create the ALS client instance.
+
+    Args:
+        file_path: Optional file path to derive project root from.
+                   If provided and ALS isn't running, will detect project
+                   from file location (looks for alire.toml, *.gpr, .git).
+    """
     global _als_client, _als_monitor
 
     async with _als_lock:
@@ -74,6 +82,9 @@ async def get_als_client() -> ALSClient:
         project_root_env = os.environ.get("ADA_PROJECT_ROOT")
         if project_root_env:
             project_root = Path(project_root_env)
+        elif file_path:
+            # Detect project from file path
+            project_root = find_project_root(Path(file_path))
         else:
             # Default to current directory
             project_root = Path.cwd()
@@ -555,8 +566,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Handle tool invocations."""
     logger.debug(f"Tool called: {name} with args: {arguments}")
 
+    # Extract file path from arguments for project detection
+    file_path = arguments.get("file") or arguments.get("gpr_file")
+
     try:
-        client = await get_als_client()
+        client = await get_als_client(file_path=file_path)
     except Exception as e:
         error_result = {"error": f"Failed to connect to ALS: {e}"}
         return [TextContent(type="text", text=json.dumps(error_result, indent=2))]

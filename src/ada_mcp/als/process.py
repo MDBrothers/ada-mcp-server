@@ -136,6 +136,46 @@ class ALSHealthMonitor:
         logger.debug("ALS restart counter reset")
 
 
+def find_project_root(file_path: Path) -> Path:
+    """
+    Find the Ada project root by walking up from a file path.
+
+    Looks for markers in this order:
+    1. alire.toml (Alire project)
+    2. *.gpr file (GPR project)
+    3. .git directory (repository root)
+
+    Falls back to file's parent directory if nothing found.
+    """
+    current = file_path.parent if file_path.is_file() else file_path
+
+    # Walk up the directory tree
+    for parent in [current, *current.parents]:
+        # Check for Alire project
+        if (parent / "alire.toml").exists():
+            logger.debug(f"Found Alire project at {parent}")
+            return parent
+
+        # Check for GPR file
+        gpr_files = list(parent.glob("*.gpr"))
+        if gpr_files:
+            logger.debug(f"Found GPR project at {parent}")
+            return parent
+
+        # Check for git root (last resort)
+        if (parent / ".git").exists():
+            logger.debug(f"Found git root at {parent}")
+            return parent
+
+        # Stop at filesystem root
+        if parent == parent.parent:
+            break
+
+    # Fall back to file's directory
+    logger.debug(f"No project markers found, using {current}")
+    return current
+
+
 async def get_alire_environment(project_root: Path) -> dict[str, str] | None:
     """
     Get environment variables from Alire for the project.
