@@ -64,7 +64,7 @@ class ALSClient:
         if params is not None:
             request["params"] = params
 
-        future: asyncio.Future[Any] = asyncio.get_event_loop().create_future()
+        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
         self._pending_requests[request_id] = future
 
         logger.debug(f"Sending request {request_id}: {method}")
@@ -91,6 +91,22 @@ class ALSClient:
 
         logger.debug(f"Sending notification: {method}")
         await self._write_message(notification)
+
+    async def _send_response(
+        self, request_id: int | str, result: Any = None, error: dict[str, Any] | None = None
+    ) -> None:
+        """Send a response to a server-initiated request."""
+        response: dict[str, Any] = {
+            "jsonrpc": "2.0",
+            "id": request_id,
+        }
+        if error is not None:
+            response["error"] = error
+        else:
+            response["result"] = result
+
+        logger.debug(f"Sending response for request {request_id}")
+        await self._write_message(response)
 
     async def _write_message(self, message: dict[str, Any]) -> None:
         """Write JSON-RPC message to ALS stdin."""
@@ -154,8 +170,36 @@ class ALSClient:
 
     async def _handle_message(self, message: dict[str, Any]) -> None:
         """Handle incoming LSP message."""
-        if "id" in message:
-            # Response to a request
+        has_id = "id" in message
+        has_method = "method" in message
+
+        if has_id and has_method:
+            # Server-initiated request (e.g., client/registerCapability)
+            # We need to respond to these
+            method = message["method"]
+            request_id = message["id"]
+            params = message.get("params", {})
+
+            logger.debug(f"Received server request: {method} (id={request_id})")
+
+            # Handle known server requests
+            if method in ("client/registerCapability", "client/unregisterCapability"):
+                # Accept capability registration silently
+                await self._send_response(request_id, result=None)
+            elif method == "workspace/configuration":
+                # Return empty config for each requested item
+                items = params.get("items", [])
+                await self._send_response(request_id, result=[{} for _ in items])
+            elif method == "window/workDoneProgress/create":
+                # Accept progress token creation
+                await self._send_response(request_id, result=None)
+            else:
+                logger.debug(f"Unhandled server request: {method}")
+                # Send empty success response
+                await self._send_response(request_id, result=None)
+
+        elif has_id and not has_method:
+            # Response to our request
             request_id = message["id"]
             future = self._pending_requests.pop(request_id, None)
 
