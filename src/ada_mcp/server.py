@@ -53,6 +53,7 @@ server = Server("ada-mcp-server")
 # Global ALS client and health monitor (initialized on first use)
 _als_client: ALSClient | None = None
 _als_monitor: ALSHealthMonitor | None = None
+_als_project_root: Path | None = None  # Track current project
 _als_lock = asyncio.Lock()
 
 
@@ -69,16 +70,14 @@ async def get_als_client(file_path: str | None = None) -> ALSClient:
 
     Args:
         file_path: Optional file path to derive project root from.
-                   If provided and ALS isn't running, will detect project
-                   from file location (looks for alire.toml, *.gpr, .git).
+                   If provided, will detect project from file location
+                   (looks for alire.toml, *.gpr, .git).
+                   If project differs from current, ALS will be restarted.
     """
-    global _als_client, _als_monitor
+    global _als_client, _als_monitor, _als_project_root
 
     async with _als_lock:
-        if _als_client is not None and _als_client.is_running:
-            return _als_client
-
-        # Determine project root
+        # Determine project root for this request
         project_root_env = os.environ.get("ADA_PROJECT_ROOT")
         if project_root_env:
             project_root = Path(project_root_env)
@@ -89,12 +88,30 @@ async def get_als_client(file_path: str | None = None) -> ALSClient:
             # Default to current directory
             project_root = Path.cwd()
 
+        # Check if we need to restart ALS for a different project
+        if _als_client is not None and _als_client.is_running:
+            if _als_project_root == project_root:
+                # Same project, reuse existing client
+                return _als_client
+            else:
+                # Different project, need to restart ALS
+                logger.info(
+                    f"Project changed from {_als_project_root} to {project_root}, restarting ALS..."
+                )
+                try:
+                    await shutdown_als(_als_client, _als_monitor)
+                except Exception as e:
+                    logger.warning(f"Error shutting down old ALS: {e}")
+                _als_client = None
+                _als_monitor = None
+
         logger.info(f"Initializing ALS for project: {project_root}")
 
         try:
             _als_client, _als_monitor = await start_als_with_monitoring(
                 project_root, on_restart=_on_als_restart
             )
+            _als_project_root = project_root  # Track which project we initialized for
             # Give ALS time to index
             await asyncio.sleep(1.0)
             return _als_client
@@ -105,7 +122,7 @@ async def get_als_client(file_path: str | None = None) -> ALSClient:
 
 async def shutdown_als_client() -> None:
     """Shutdown the ALS client if running."""
-    global _als_client, _als_monitor
+    global _als_client, _als_monitor, _als_project_root
 
     async with _als_lock:
         if _als_client is not None:
@@ -116,6 +133,7 @@ async def shutdown_als_client() -> None:
             finally:
                 _als_client = None
                 _als_monitor = None
+                _als_project_root = None
 
 
 @server.list_tools()
