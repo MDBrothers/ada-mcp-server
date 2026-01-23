@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from mcp.server import Server
@@ -50,90 +51,231 @@ logger = logging.getLogger(__name__)
 # Create the MCP server instance
 server = Server("ada-mcp-server")
 
-# Global ALS client and health monitor (initialized on first use)
-_als_client: ALSClient | None = None
-_als_monitor: ALSHealthMonitor | None = None
-_als_project_root: Path | None = None  # Track current project
-_als_lock = asyncio.Lock()
+# =============================================================================
+# Multi-Project ALS Pool
+# =============================================================================
+# Instead of a single global ALS, we maintain a pool of ALS instances,
+# one per project. This allows multiple users/projects to work simultaneously
+# without restarting ALS constantly.
 
 
-def _on_als_restart(new_client: ALSClient) -> None:
-    """Callback when ALS is restarted by health monitor."""
-    global _als_client
-    _als_client = new_client
-    logger.info("ALS client reference updated after restart")
+@dataclass
+class ALSInstance:
+    """Represents an ALS instance for a specific project."""
+
+    client: ALSClient
+    monitor: ALSHealthMonitor | None
+    project_root: Path
+    last_used: float  # timestamp
+    lock: asyncio.Lock  # per-instance lock for operations
 
 
-async def get_als_client(file_path: str | None = None) -> ALSClient:
+class ALSPool:
     """
-    Get or create the ALS client instance.
+    Pool of ALS instances, one per project.
 
-    Args:
-        file_path: Optional file path to derive project root from.
-                   If provided, will detect project from file location
-                   (looks for alire.toml, *.gpr, .git).
-                   If project differs from current, ALS will be restarted.
+    Supports multiple concurrent projects with LRU eviction to limit
+    memory usage. Each project gets its own ALS with proper Alire
+    environment.
     """
-    global _als_client, _als_monitor, _als_project_root
 
-    async with _als_lock:
-        # Determine project root for this request
+    def __init__(self, max_instances: int = 3, idle_timeout: float = 300.0):
+        """
+        Initialize the ALS pool.
+
+        Args:
+            max_instances: Maximum number of concurrent ALS instances
+            idle_timeout: Seconds after which idle instances can be evicted
+        """
+        self.max_instances = max_instances
+        self.idle_timeout = idle_timeout
+        self._instances: dict[Path, ALSInstance] = {}
+        self._pool_lock = asyncio.Lock()
+        self._cleanup_task: asyncio.Task | None = None
+
+    def _create_restart_callback(self, project_root: Path):
+        """Create a restart callback for a specific project."""
+
+        def callback(new_client: ALSClient) -> None:
+            if project_root in self._instances:
+                self._instances[project_root].client = new_client
+                logger.info(f"ALS client updated after restart for {project_root}")
+
+        return callback
+
+    async def get_client(self, file_path: str | None = None) -> ALSClient:
+        """
+        Get an ALS client for the project containing the given file.
+
+        Args:
+            file_path: File path to determine project from
+
+        Returns:
+            ALSClient for the appropriate project
+        """
+        import time
+
+        # Determine project root
         project_root_env = os.environ.get("ADA_PROJECT_ROOT")
         if project_root_env:
             project_root = Path(project_root_env)
         elif file_path:
-            # Detect project from file path
             project_root = find_project_root(Path(file_path))
         else:
-            # Default to current directory
             project_root = Path.cwd()
 
-        # Check if we need to restart ALS for a different project
-        if _als_client is not None and _als_client.is_running:
-            if _als_project_root == project_root:
-                # Same project, reuse existing client
-                return _als_client
-            else:
-                # Different project, need to restart ALS
-                logger.info(
-                    f"Project changed from {_als_project_root} to {project_root}, restarting ALS..."
+        async with self._pool_lock:
+            # Check if we already have an instance for this project
+            if project_root in self._instances:
+                instance = self._instances[project_root]
+                if instance.client.is_running:
+                    instance.last_used = time.time()
+                    logger.debug(f"Reusing ALS for project: {project_root}")
+                    return instance.client
+                else:
+                    # Instance died, remove it
+                    logger.warning(f"ALS instance for {project_root} died, removing")
+                    del self._instances[project_root]
+
+            # Need to create a new instance
+            # First, check if we need to evict old instances
+            await self._evict_if_needed()
+
+            logger.info(f"Creating new ALS instance for project: {project_root}")
+
+            try:
+                client, monitor = await start_als_with_monitoring(
+                    project_root, on_restart=self._create_restart_callback(project_root)
                 )
-                try:
-                    await shutdown_als(_als_client, _als_monitor)
-                except Exception as e:
-                    logger.warning(f"Error shutting down old ALS: {e}")
-                _als_client = None
-                _als_monitor = None
 
-        logger.info(f"Initializing ALS for project: {project_root}")
+                instance = ALSInstance(
+                    client=client,
+                    monitor=monitor,
+                    project_root=project_root,
+                    last_used=time.time(),
+                    lock=asyncio.Lock(),
+                )
+                self._instances[project_root] = instance
 
+                # Give ALS time to index
+                await asyncio.sleep(1.0)
+
+                # Start cleanup task if not running
+                if self._cleanup_task is None or self._cleanup_task.done():
+                    self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+
+                return client
+
+            except Exception as e:
+                logger.exception(f"Failed to start ALS for {project_root}: {e}")
+                raise
+
+    async def _evict_if_needed(self) -> None:
+        """Evict oldest instance if at capacity."""
+
+        if len(self._instances) < self.max_instances:
+            return
+
+        # Find the oldest (least recently used) instance
+        oldest_root = None
+        oldest_time = float("inf")
+
+        for root, instance in self._instances.items():
+            if instance.last_used < oldest_time:
+                oldest_time = instance.last_used
+                oldest_root = root
+
+        if oldest_root:
+            logger.info(f"Evicting ALS instance for {oldest_root} (LRU)")
+            await self._shutdown_instance(oldest_root)
+
+    async def _shutdown_instance(self, project_root: Path) -> None:
+        """Shutdown a specific ALS instance."""
+        if project_root not in self._instances:
+            return
+
+        instance = self._instances.pop(project_root)
         try:
-            _als_client, _als_monitor = await start_als_with_monitoring(
-                project_root, on_restart=_on_als_restart
-            )
-            _als_project_root = project_root  # Track which project we initialized for
-            # Give ALS time to index
-            await asyncio.sleep(1.0)
-            return _als_client
+            await shutdown_als(instance.client, instance.monitor)
         except Exception as e:
-            logger.exception(f"Failed to start ALS: {e}")
-            raise
+            logger.warning(f"Error shutting down ALS for {project_root}: {e}")
+
+    async def _cleanup_loop(self) -> None:
+        """Periodically clean up idle instances."""
+        import time
+
+        while True:
+            try:
+                await asyncio.sleep(60.0)  # Check every minute
+
+                async with self._pool_lock:
+                    now = time.time()
+                    to_remove = []
+
+                    for root, instance in self._instances.items():
+                        idle_time = now - instance.last_used
+                        if idle_time > self.idle_timeout:
+                            logger.info(f"ALS for {root} idle for {idle_time:.0f}s, shutting down")
+                            to_remove.append(root)
+
+                    for root in to_remove:
+                        await self._shutdown_instance(root)
+
+                    # Stop cleanup loop if no instances left
+                    if not self._instances:
+                        logger.debug("No ALS instances, stopping cleanup loop")
+                        return
+
+            except asyncio.CancelledError:
+                logger.debug("Cleanup loop cancelled")
+                return
+            except Exception as e:
+                logger.exception(f"Error in cleanup loop: {e}")
+
+    async def shutdown_all(self) -> None:
+        """Shutdown all ALS instances."""
+        async with self._pool_lock:
+            if self._cleanup_task:
+                self._cleanup_task.cancel()
+
+            for root in list(self._instances.keys()):
+                await self._shutdown_instance(root)
+
+    def get_stats(self) -> dict:
+        """Get pool statistics."""
+        import time
+
+        now = time.time()
+        return {
+            "active_instances": len(self._instances),
+            "max_instances": self.max_instances,
+            "projects": [
+                {
+                    "project": str(root),
+                    "idle_seconds": now - inst.last_used,
+                    "is_running": inst.client.is_running,
+                }
+                for root, inst in self._instances.items()
+            ],
+        }
+
+
+# Global ALS pool (replaces single client)
+_als_pool = ALSPool(max_instances=3, idle_timeout=300.0)
+
+
+async def get_als_client(file_path: str | None = None) -> ALSClient:
+    """
+    Get an ALS client for the project containing the given file.
+
+    This is a convenience wrapper around the ALS pool.
+    """
+    return await _als_pool.get_client(file_path)
 
 
 async def shutdown_als_client() -> None:
-    """Shutdown the ALS client if running."""
-    global _als_client, _als_monitor, _als_project_root
-
-    async with _als_lock:
-        if _als_client is not None:
-            try:
-                await shutdown_als(_als_client, _als_monitor)
-            except Exception as e:
-                logger.warning(f"Error shutting down ALS: {e}")
-            finally:
-                _als_client = None
-                _als_monitor = None
-                _als_project_root = None
+    """Shutdown all ALS clients."""
+    await _als_pool.shutdown_all()
 
 
 @server.list_tools()
