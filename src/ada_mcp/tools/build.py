@@ -7,6 +7,7 @@ Provides tools for:
 """
 
 import asyncio
+import logging
 import os
 import re
 from pathlib import Path
@@ -16,6 +17,10 @@ try:
     import tomllib
 except ImportError:
     import tomli as tomllib  # type: ignore
+
+from ada_mcp.als.process import get_alire_environment
+
+logger = logging.getLogger(__name__)
 
 
 # GPRbuild error line pattern: file.adb:line:column: message
@@ -111,6 +116,12 @@ async def handle_build(
             "warnings": [],
         }
 
+    # Get project directory and check for Alire environment
+    project_dir = gpr_path.parent
+    alire_env = await get_alire_environment(project_dir)
+    if alire_env:
+        logger.info(f"Using Alire environment for build in {project_dir}")
+
     # Build command
     cmd = ["gprbuild", "-P", str(gpr_path)]
 
@@ -122,6 +133,7 @@ async def handle_build(
                 *clean_cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=alire_env,
             )
             await clean_proc.wait()
         except FileNotFoundError:
@@ -133,12 +145,13 @@ async def handle_build(
     if extra_args:
         cmd.extend(extra_args)
 
-    # Run gprbuild
+    # Run gprbuild with Alire environment if available
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=alire_env,
         )
         stdout, stderr = await proc.communicate()
 
