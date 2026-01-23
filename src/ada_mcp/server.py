@@ -22,6 +22,19 @@ from ada_mcp.tools import (
     handle_type_definition,
     handle_workspace_symbols,
 )
+from ada_mcp.tools.project import (
+    handle_call_hierarchy,
+    handle_dependency_graph,
+    handle_project_info,
+)
+from ada_mcp.tools.refactoring import (
+    handle_code_actions,
+    handle_completions,
+    handle_format_file,
+    handle_get_spec,
+    handle_rename_symbol,
+    handle_signature_help,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +268,223 @@ async def list_tools() -> list[Tool]:
                 "required": ["file", "line", "column"],
             },
         ),
+        Tool(
+            name="ada_project_info",
+            description="Get information about an Ada project from its GPR file",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "gpr_file": {
+                        "type": "string",
+                        "description": "Absolute path to the .gpr project file",
+                    },
+                },
+                "required": ["gpr_file"],
+            },
+        ),
+        Tool(
+            name="ada_call_hierarchy",
+            description="Get call hierarchy (incoming/outgoing calls) for an Ada symbol",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Absolute path to the Ada file",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "1-based line number",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "1-based column number",
+                    },
+                    "direction": {
+                        "type": "string",
+                        "description": "Call direction: 'outgoing', 'incoming', or 'both'",
+                        "enum": ["outgoing", "incoming", "both"],
+                        "default": "outgoing",
+                    },
+                },
+                "required": ["file", "line", "column"],
+            },
+        ),
+        Tool(
+            name="ada_dependency_graph",
+            description="Analyze package dependencies from 'with' clauses",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Absolute path to Ada file or directory to analyze",
+                    },
+                },
+                "required": ["file"],
+            },
+        ),
+        Tool(
+            name="ada_completions",
+            description="Get code completion suggestions at a position in an Ada file",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Absolute path to the Ada file",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "1-based line number",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "1-based column number",
+                    },
+                    "trigger_character": {
+                        "type": "string",
+                        "description": "Trigger character (e.g., '.', ':')",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of completions to return",
+                        "default": 50,
+                    },
+                },
+                "required": ["file", "line", "column"],
+            },
+        ),
+        Tool(
+            name="ada_signature_help",
+            description="Get function/procedure signature help at a position",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Absolute path to the Ada file",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "1-based line number",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "1-based column number",
+                    },
+                },
+                "required": ["file", "line", "column"],
+            },
+        ),
+        Tool(
+            name="ada_code_actions",
+            description="Get available code actions (quick fixes, refactorings) for a range",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Absolute path to the Ada file",
+                    },
+                    "start_line": {
+                        "type": "integer",
+                        "description": "Start line number (1-based)",
+                    },
+                    "start_column": {
+                        "type": "integer",
+                        "description": "Start column number (1-based)",
+                    },
+                    "end_line": {
+                        "type": "integer",
+                        "description": "End line number (1-based), defaults to start_line",
+                    },
+                    "end_column": {
+                        "type": "integer",
+                        "description": "End column number (1-based), defaults to start_column",
+                    },
+                },
+                "required": ["file", "start_line", "start_column"],
+            },
+        ),
+        # Phase 5: Refactoring
+        Tool(
+            name="ada_rename_symbol",
+            description="Rename an Ada symbol across the entire project",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Absolute path to the Ada file",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "1-based line number",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "1-based column number",
+                    },
+                    "new_name": {
+                        "type": "string",
+                        "description": "New name for the symbol",
+                    },
+                    "preview": {
+                        "type": "boolean",
+                        "description": "If true, only return changes without applying",
+                        "default": True,
+                    },
+                },
+                "required": ["file", "line", "column", "new_name"],
+            },
+        ),
+        Tool(
+            name="ada_format_file",
+            description="Format an Ada source file using GNATformat",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Absolute path to the Ada file",
+                    },
+                    "tab_size": {
+                        "type": "integer",
+                        "description": "Tab width (default 3 for Ada)",
+                        "default": 3,
+                    },
+                    "insert_spaces": {
+                        "type": "boolean",
+                        "description": "Use spaces instead of tabs",
+                        "default": True,
+                    },
+                },
+                "required": ["file"],
+            },
+        ),
+        Tool(
+            name="ada_get_spec",
+            description="Navigate from body to spec file, or find corresponding spec",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "description": "Absolute path to the Ada file (usually .adb)",
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Optional 1-based line number for precise lookup",
+                    },
+                    "column": {
+                        "type": "integer",
+                        "description": "Optional 1-based column number for precise lookup",
+                    },
+                },
+                "required": ["file"],
+            },
+        ),
     ]
 
 
@@ -331,6 +561,79 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                     file=arguments["file"],
                     line=arguments["line"],
                     column=arguments["column"],
+                )
+
+            case "ada_project_info":
+                result = await handle_project_info(
+                    gpr_file=arguments["gpr_file"],
+                )
+
+            case "ada_call_hierarchy":
+                result = await handle_call_hierarchy(
+                    client,
+                    file=arguments["file"],
+                    line=arguments["line"],
+                    column=arguments["column"],
+                    direction=arguments.get("direction", "outgoing"),
+                )
+
+            case "ada_dependency_graph":
+                result = await handle_dependency_graph(
+                    file=arguments["file"],
+                )
+
+            case "ada_completions":
+                result = await handle_completions(
+                    client,
+                    file=arguments["file"],
+                    line=arguments["line"],
+                    column=arguments["column"],
+                    trigger_character=arguments.get("trigger_character"),
+                    limit=arguments.get("limit", 50),
+                )
+
+            case "ada_signature_help":
+                result = await handle_signature_help(
+                    client,
+                    file=arguments["file"],
+                    line=arguments["line"],
+                    column=arguments["column"],
+                )
+
+            case "ada_code_actions":
+                result = await handle_code_actions(
+                    client,
+                    file=arguments["file"],
+                    start_line=arguments["start_line"],
+                    start_column=arguments["start_column"],
+                    end_line=arguments.get("end_line"),
+                    end_column=arguments.get("end_column"),
+                )
+
+            case "ada_rename_symbol":
+                result = await handle_rename_symbol(
+                    client,
+                    file=arguments["file"],
+                    line=arguments["line"],
+                    column=arguments["column"],
+                    new_name=arguments["new_name"],
+                    preview=arguments.get("preview", True),
+                )
+
+            case "ada_format_file":
+                result = await handle_format_file(
+                    client,
+                    file=arguments["file"],
+                    tab_size=arguments.get("tab_size", 3),
+                    insert_spaces=arguments.get("insert_spaces", True),
+                )
+
+            case "ada_get_spec":
+                result = await handle_get_spec(
+                    client,
+                    file=arguments["file"],
+                    line=arguments.get("line"),
+                    column=arguments.get("column"),
                 )
 
             case _:

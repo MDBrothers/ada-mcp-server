@@ -3,18 +3,18 @@
 from ada_mcp.als.types import Position
 
 
-def to_lsp_position(line: int, column: int) -> Position:
+def to_lsp_position(line: int, column: int) -> dict[str, int]:
     """
-    Convert 1-based user coordinates to 0-based LSP position.
+    Convert 1-based user coordinates to 0-based LSP position dict.
 
     Args:
         line: 1-based line number
         column: 1-based column number
 
     Returns:
-        LSP Position (0-based)
+        LSP Position dict (0-based) with 'line' and 'character' keys
     """
-    return Position(line=line - 1, character=column - 1)
+    return {"line": line - 1, "character": column - 1}
 
 
 def from_lsp_position(position: Position) -> tuple[int, int]:

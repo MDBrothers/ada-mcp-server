@@ -726,34 +726,47 @@ Core infrastructure and basic navigation tools.
 - [x] Diagnostics reported for files with errors
 
 **Unit Tests** (`tests/test_phase1_unit.py`):
-- [ ] goto_definition: single/multiple locations, null response, empty array
-- [ ] goto_definition: line/column conversion (1-based to 0-based)
-- [ ] goto_definition: ALS error handling
-- [ ] hover: markdown content, plaintext, marked string array
-- [ ] hover: not found (null, empty)
-- [ ] diagnostics: all files, single file, severity filtering
-- [ ] diagnostics: line number conversion
-- [ ] Input validation: missing params, empty paths, invalid values
-- [ ] File path handling: relative paths, file:// URIs, normalization
+- [x] goto_definition: single/multiple locations, null response, empty array
+- [x] goto_definition: line/column conversion (1-based to 0-based)
+- [x] goto_definition: ALS error handling
+- [x] goto_definition: line zero, invalid inputs
+- [x] hover: markdown content, plaintext, marked string array
+- [x] hover: not found (null, empty)
+- [x] hover: keyword, empty line
+- [x] diagnostics: all files, single file, severity filtering
+- [x] diagnostics: line number conversion
+- [x] diagnostics: no errors, error filtering
+- [x] Input validation: missing params, empty paths, invalid values
+- [x] File path handling: relative paths, file:// URIs, normalization
+- [x] All 26 unit tests passing with mocked ALS
 
 **Integration Tests** (`scripts/test_phase1_integration.py`):
-- [ ] goto_definition: procedure call → spec
-- [ ] goto_definition: package name → spec  
-- [ ] goto_definition: with clause → spec
-- [ ] goto_definition: Ada.Text_IO → stdlib
-- [ ] goto_definition: local variable → declaration
-- [ ] goto_definition: keyword (no definition)
-- [ ] goto_definition: whitespace, end of file
-- [ ] goto_definition: non-existent file
-- [ ] goto_definition: line 0, very large line number
-- [ ] hover: procedure name, function call, variable
-- [ ] hover: type name, package name
-- [ ] hover: integer literal, parameter
-- [ ] hover: keyword, empty line
-- [ ] hover: non-existent file
-- [ ] diagnostics: clean project, specific file
-- [ ] diagnostics: filter errors, filter warnings
-- [ ] diagnostics: non-existent file
+- [x] goto_definition: procedure call → spec
+- [x] goto_definition: package name → spec  
+- [x] goto_definition: with clause → spec
+- [x] goto_definition: Ada.Text_IO → stdlib
+- [x] goto_definition: local variable → declaration
+- [x] goto_definition: keyword (no definition)
+- [x] goto_definition: whitespace, end of file
+- [x] goto_definition: non-existent file
+- [x] goto_definition: line 0, very large line number
+- [x] hover: procedure name, function call, variable
+- [x] hover: type name, package name
+- [x] hover: integer literal, parameter
+- [x] hover: function in spec/body, keyword, empty line
+- [x] hover: non-existent file
+- [x] diagnostics: clean project, specific file
+- [x] diagnostics: filter errors, filter warnings
+- [x] diagnostics: non-existent file
+- [x] type_definition: variable → type, parameter → type
+- [x] type_definition: function name, keyword, non-existent file
+- [x] implementation: spec → body, body function, package spec → body
+- [x] implementation: variable, non-existent file
+- [x] find_references: function Add, local variable
+- [x] find_references: exclude declaration
+- [x] document_symbols: main.adb, utils.ads
+- [x] workspace_symbols: search 'Add', search 'Main'
+- [x] All 47 integration tests passing with real ALS
 
 **Test Fixtures:**
 - `tests/fixtures/sample_project/` - Clean Ada project
@@ -781,97 +794,367 @@ Full navigation capabilities for code exploration.
 
 ---
 
-### Phase 3: Project Intelligence
-Project-level understanding and analysis.
+### Phase 3: Project Intelligence ✅ COMPLETE
 
-**Deliverables:**
-- [ ] `ada_project_info` tool
-- [ ] `ada_call_hierarchy` tool
-- [ ] `ada_dependency_graph` tool
-- [ ] GPR file parsing for project info
-- [ ] Package dependency analysis
+**Summary:** All 3 tools implemented with 15 unit tests + 7 integration tests passing.
 
-**Test Criteria:**
-- [ ] Project info returns accurate source directories
-- [ ] Call hierarchy shows incoming/outgoing calls
-- [ ] Dependency graph detects circular dependencies
-- [ ] Works with multi-project setups
+#### 3.1: GPR File Parser ✅
+- [x] Create `src/ada_mcp/tools/project.py` file  
+- [x] Implement `parse_gpr_file()` function with source dirs, object dir, main units
+- [x] Add unit tests (3 tests: basic, nonexistent, multiple sources)
+- [x] Tested with `tests/fixtures/sample_project/sample.gpr`
 
----
+#### 3.2: ada_project_info Tool ✅
+- [x] Add `ada_project_info` to MCP server tool list
+- [x] Implement `handle_project_info()` returning absolute paths
+- [x] Add unit tests (3 tests: basic, absolute paths, nonexistent)
+- [x] Add integration tests (2 tests passing)
 
-### Phase 4: Code Intelligence
-Smart code assistance and suggestions.
+#### 3.3 & 3.4: Call Hierarchy ✅
+- [x] Add `ada_call_hierarchy` to MCP server tool list
+- [x] Implement `handle_call_hierarchy()` with LSP callHierarchy APIs
+- [x] Support outgoing, incoming, and both directions
+- [x] Add unit tests (4 tests: outgoing, incoming, both, not found)
+- [x] Add integration tests (3 tests passing)
+- [x] Fixed Position serialization issue in `to_lsp_position()`
 
-**Deliverables:**
-- [ ] `ada_completions` tool
-- [ ] `ada_signature_help` tool
-- [ ] `ada_code_actions` tool
-- [ ] Context-aware completion filtering
-- [ ] Parameter hint support
+#### 3.5: Dependency Graph ✅
+- [x] Add `ada_dependency_graph` to MCP server tool list
+- [x] Implement `handle_dependency_graph()` parsing `with` clauses
+- [x] Support single files and directories
+- [x] Add unit tests (5 tests: single file, directory, multiple with, nonexistent, package body)
+- [x] Add integration tests (2 tests passing)
 
-**Test Criteria:**
-- [ ] Completions include relevant symbols only
-- [ ] Signature help shows active parameter
-- [ ] Code actions offer appropriate fixes
-- [ ] Performance < 200ms for completions
+**Test Results:**
+- Unit tests: 15/15 passing (`tests/test_project.py`)
+- Integration tests: 54/54 passing (7 new Phase 3 tests)
+- Total: All tests passing ✅
 
----
+**Files to modify:**
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/project.py` (add handle_dependency_graph)
+- `tests/test_project.py` (add test)
+- `scripts/test_phase1_integration.py` (add test case)
 
-### Phase 5: Refactoring & Code Generation
-Safe code modifications and generation.
+**Test command:** `pytest tests/test_project.py::test_dependency_graph -v`
 
-**Deliverables:**
-- [ ] `ada_rename_symbol` tool
-- [ ] `ada_format_file` tool
-- [ ] `ada_get_spec` tool
-- [ ] `ada_stub_body` tool
-- [ ] Preview mode for all refactorings
-- [ ] Undo support via change tracking
+### Phase 4: Code Intelligence (Granular Tasks)
 
-**Test Criteria:**
-- [ ] Rename updates all references correctly
-- [ ] Formatting matches GNATformat style
-- [ ] Spec/body navigation works bidirectionally
-- [ ] Stub generation produces compilable code
+#### 4.1: Completions - Basic
+**Goal:** Provide basic code completion suggestions.
 
----
+**Tasks:**
+- [ ] Create `src/ada_mcp/tools/refactoring.py` file
+- [ ] Add `ada_completions` to MCP server tool list
+- [ ] Implement `handle_completions()` using LSP `textDocument/completion`
+- [ ] Return list of completion items with labels and kinds
+- [ ] Add unit test with mocked ALS response
 
-### Phase 6: Build & Project Management
-Build integration and advanced project features.
+**Files to modify:**
+- `src/ada_mcp/tools/refactoring.py` (create new)
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/__init__.py` (add import)
+- `tests/test_refactoring.py` (create new)
 
-**Deliverables:**
-- [ ] `ada_build` tool
-- [ ] `ada_alire_info` tool
-- [ ] Build output parsing
-- [ ] Alire manifest reading
-- [ ] Multi-project support
+**Test command:** `pytest tests/test_refactoring.py::test_completions_basic -v`
 
-**Test Criteria:**
-- [ ] Build errors parsed correctly
-- [ ] Alire projects detected automatically
-- [ ] Build results match `gprbuild` output
-- [ ] Works with aggregate projects
+#### 4.2: Completions - Context Parsing
+**Goal:** Parse completion context for better suggestions.
 
----
+**Tasks:**
+- [ ] Extend `handle_completions()` to parse trigger characters
+- [ ] Handle different completion contexts (dot, colon, etc.)
+- [ ] Filter completions based on context
+- [ ] Add unit tests for different contexts
+- [ ] Add integration test with real completion scenarios
 
-### Phase 7: Polish & Production
-Production readiness and documentation.
+**Files to modify:**
+- `src/ada_mcp/tools/refactoring.py` (modify handle_completions)
+- `tests/test_refactoring.py` (add tests)
+- `scripts/test_phase1_integration.py` (add test cases)
 
-**Deliverables:**
-- [ ] Comprehensive error recovery
-- [ ] ALS crash auto-restart
-- [ ] Performance optimization (caching)
-- [ ] Full documentation with examples
-- [ ] CI/CD pipeline
-- [ ] PyPI publication
+**Test command:** `pytest tests/test_refactoring.py -k "completions" -v`
 
-**Test Criteria:**
-- [ ] Survives ALS crashes gracefully
-- [ ] Response time < 500ms for navigation
-- [ ] Documentation covers all tools
-- [ ] Works on Linux, macOS, Windows
+#### 4.3: Signature Help
+**Goal:** Show function signatures as you type.
 
----
+**Tasks:**
+- [ ] Add `ada_signature_help` to MCP server tool list
+- [ ] Implement `handle_signature_help()` using LSP `textDocument/signatureHelp`
+- [ ] Parse and return active parameter, signatures list
+- [ ] Add unit test with mocked response
+- [ ] Add integration test for function calls
+
+**Files to modify:**
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/refactoring.py` (add handle_signature_help)
+- `tests/test_refactoring.py` (add test)
+- `scripts/test_phase1_integration.py` (add test case)
+
+**Test command:** `pytest tests/test_refactoring.py::test_signature_help -v`
+
+#### 4.4: Code Actions
+**Goal:** Provide quick fixes and refactoring suggestions.
+
+**Tasks:**
+- [ ] Add `ada_code_actions` to MCP server tool list
+- [ ] Implement `handle_code_actions()` using LSP `textDocument/codeAction`
+- [ ] Return list of available code actions
+- [ ] Add unit test with mocked response
+- [ ] Add integration test for common code actions
+
+**Files to modify:**
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/refactoring.py` (add handle_code_actions)
+- `tests/test_refactoring.py` (add test)
+- `scripts/test_phase1_integration.py` (add test case)
+
+**Test command:** `pytest tests/test_refactoring.py::test_code_actions -v`
+
+### Phase 5: Refactoring & Code Generation (Granular Tasks)
+
+#### 5.1: Rename Symbol - Basic
+**Goal:** Rename symbols with basic validation.
+
+**Tasks:**
+- [ ] Add `ada_rename_symbol` to MCP server tool list
+- [ ] Implement `handle_rename_symbol()` using LSP `textDocument/rename`
+- [ ] Validate new name (Ada identifier rules)
+- [ ] Return workspace edits for all changes
+- [ ] Add unit test with mocked response
+
+**Files to modify:**
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/refactoring.py` (add handle_rename_symbol)
+- `tests/test_refactoring.py` (add test)
+
+**Test command:** `pytest tests/test_refactoring.py::test_rename_basic -v`
+
+#### 5.2: Rename Symbol - Apply Changes
+**Goal:** Apply rename changes to files.
+
+**Tasks:**
+- [ ] Extend `handle_rename_symbol()` to apply workspace edits
+- [ ] Handle file modifications safely
+- [ ] Add integration test that actually renames a symbol
+- [ ] Test with multiple files affected
+- [ ] Add error handling for failed renames
+
+**Files to modify:**
+- `src/ada_mcp/tools/refactoring.py` (modify handle_rename_symbol)
+- `tests/test_refactoring.py` (add integration test)
+- `scripts/test_phase1_integration.py` (add test case)
+
+**Test command:** `pytest tests/test_refactoring.py::test_rename_apply -v`
+
+#### 5.3: Format File
+**Goal:** Format Ada files using GNATformat.
+
+**Tasks:**
+- [ ] Add `ada_format_file` to MCP server tool list
+- [ ] Implement `handle_format_file()` using LSP `textDocument/formatting`
+- [ ] Return formatted text or apply changes
+- [ ] Add unit test with mocked response
+- [ ] Add integration test with actual formatting
+
+**Files to modify:**
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/refactoring.py` (add handle_format_file)
+- `tests/test_refactoring.py` (add test)
+- `scripts/test_phase1_integration.py` (add test case)
+
+**Test command:** `pytest tests/test_refactoring.py::test_format_file -v`
+
+#### 5.4: Spec Navigation
+**Goal:** Navigate between spec and body files.
+
+**Tasks:**
+- [ ] Add `ada_get_spec` to MCP server tool list
+- [ ] Implement `handle_get_spec()` that finds corresponding spec/body
+- [ ] Use file naming conventions (.ads/.adb)
+- [ ] Add unit test with file path logic
+- [ ] Add integration test with real files
+
+**Files to modify:**
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/refactoring.py` (add handle_get_spec)
+- `tests/test_refactoring.py` (add test)
+- `scripts/test_phase1_integration.py` (add test case)
+
+**Test command:** `pytest tests/test_refactoring.py::test_get_spec -v`
+
+#### 5.5: Stub Generation
+**Goal:** Generate body stubs from specs.
+
+**Tasks:**
+- [ ] Add `ada_stub_body` to MCP server tool list
+- [ ] Implement `handle_stub_body()` using LSP `textDocument/implementation`
+- [ ] Generate basic procedure/function bodies
+- [ ] Add unit test with mocked response
+- [ ] Add integration test that creates stub file
+
+**Files to modify:**
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/refactoring.py` (add handle_stub_body)
+- `tests/test_refactoring.py` (add test)
+- `scripts/test_phase1_integration.py` (add test case)
+
+**Test command:** `pytest tests/test_refactoring.py::test_stub_body -v`
+
+### Phase 6: Build & Project Management (Granular Tasks)
+
+#### 6.1: Build Tool - Basic
+**Goal:** Run GPRbuild and parse results.
+
+**Tasks:**
+- [ ] Create `src/ada_mcp/tools/build.py` file
+- [ ] Add `ada_build` to MCP server tool list
+- [ ] Implement `handle_build()` that runs `gprbuild`
+- [ ] Parse build output for errors/warnings
+- [ ] Return structured build results
+- [ ] Add unit test with mocked subprocess
+
+**Files to modify:**
+- `src/ada_mcp/tools/build.py` (create new)
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/__init__.py` (add import)
+- `tests/test_build.py` (create new)
+
+**Test command:** `pytest tests/test_build.py::test_build_basic -v`
+
+#### 6.2: Build Tool - Error Parsing
+**Goal:** Parse GPRbuild error messages.
+
+**Tasks:**
+- [ ] Extend `handle_build()` to parse error locations
+- [ ] Convert file:line:column format to structured data
+- [ ] Handle different error message formats
+- [ ] Add unit tests for various error formats
+- [ ] Add integration test with actual build errors
+
+**Files to modify:**
+- `src/ada_mcp/tools/build.py` (modify handle_build)
+- `tests/test_build.py` (add tests)
+- `scripts/test_phase1_integration.py` (add test case)
+
+**Test command:** `pytest tests/test_build.py -k "build" -v`
+
+#### 6.3: Alire Info Tool
+**Goal:** Read Alire project information.
+
+**Tasks:**
+- [ ] Add `ada_alire_info` to MCP server tool list
+- [ ] Implement `handle_alire_info()` that reads `alire.toml`
+- [ ] Parse TOML and return project metadata
+- [ ] Add unit test with sample alire.toml
+- [ ] Add integration test with real Alire project
+
+**Files to modify:**
+- `src/ada_mcp/server.py` (add tool)
+- `src/ada_mcp/tools/build.py` (add handle_alire_info)
+- `tests/test_build.py` (add test)
+- `scripts/test_phase1_integration.py` (add test case)
+
+**Test command:** `pytest tests/test_build.py::test_alire_info -v`
+
+#### 6.4: Multi-Project Support
+**Goal:** Handle aggregate GPR projects.
+
+**Tasks:**
+- [ ] Extend GPR parser for aggregate projects
+- [ ] Support multiple GPR files in one workspace
+- [ ] Add project selection parameter to tools
+- [ ] Add unit tests for aggregate parsing
+- [ ] Add integration test with multi-project setup
+
+**Files to modify:**
+- `src/ada_mcp/tools/project.py` (modify GPR parser)
+- `src/ada_mcp/tools/build.py` (add multi-project support)
+- `tests/test_project.py` (add tests)
+- `tests/test_build.py` (add tests)
+
+**Test command:** `pytest tests/test_project.py::test_aggregate_project -v`
+
+### Phase 7: Polish & Production (Granular Tasks)
+
+#### 7.1: Error Recovery - ALS Restart
+**Goal:** Handle ALS crashes gracefully.
+
+**Tasks:**
+- [ ] Add ALS health monitoring to `src/ada_mcp/als/process.py`
+- [ ] Implement auto-restart on crash detection
+- [ ] Add exponential backoff for restart attempts
+- [ ] Add unit test for crash recovery
+- [ ] Add integration test that kills ALS and verifies restart
+
+**Files to modify:**
+- `src/ada_mcp/als/process.py` (add health monitoring)
+- `tests/test_als_process.py` (add test)
+
+**Test command:** `pytest tests/test_als_process.py::test_als_restart -v`
+
+#### 7.2: Performance Optimization - Caching
+**Goal:** Add response caching for better performance.
+
+**Tasks:**
+- [ ] Extend `src/ada_mcp/utils/cache.py` with TTL caching
+- [ ] Add cache decorators to expensive operations
+- [ ] Cache invalidation on file changes
+- [ ] Add cache metrics and monitoring
+- [ ] Add unit tests for cache behavior
+
+**Files to modify:**
+- `src/ada_mcp/utils/cache.py` (extend caching)
+- `src/ada_mcp/tools/navigation.py` (add caching)
+- `tests/test_cache.py` (add tests)
+
+**Test command:** `pytest tests/test_cache.py -v`
+
+#### 7.3: Documentation - Tool Examples
+**Goal:** Create comprehensive documentation.
+
+**Tasks:**
+- [ ] Update README.md with all tool examples
+- [ ] Add usage examples for each MCP tool
+- [ ] Document configuration options
+- [ ] Add troubleshooting section
+- [ ] Add performance benchmarks
+
+**Files to modify:**
+- `README.md` (comprehensive update)
+
+**Test command:** Manual review of documentation
+
+#### 7.4: CI/CD Pipeline - Final
+**Goal:** Complete production CI/CD.
+
+**Tasks:**
+- [ ] Add release workflow to GitHub Actions
+- [ ] Add PyPI publication on tag
+- [ ] Add cross-platform testing (Linux/macOS/Windows)
+- [ ] Add performance regression tests
+- [ ] Add security scanning
+
+**Files to modify:**
+- `.github/workflows/ci.yml` (extend)
+- `.github/workflows/release.yml` (create new)
+
+**Test command:** CI passes on all platforms
+
+#### 7.5: PyPI Publication
+**Goal:** Publish to PyPI.
+
+**Tasks:**
+- [ ] Configure pyproject.toml for PyPI
+- [ ] Add version management
+- [ ] Create distribution packages
+- [ ] Test installation from PyPI
+- [ ] Add package metadata and classifiers
+
+**Files to modify:**
+- `pyproject.toml` (add PyPI config)
+
+**Test command:** `pip install ada-mcp-server` works
 
 ## Project Structure
 

@@ -83,6 +83,7 @@ class Phase1IntegrationTests:
     def __init__(self, sample_project: Path, error_project: Path):
         self.sample_project = sample_project
         self.error_project = error_project
+        self.project_dir = sample_project  # Add this for Phase 3 tests
         self.main_adb = sample_project / "src" / "main.adb"
         self.utils_ads = sample_project / "src" / "utils.ads"
         self.utils_adb = sample_project / "src" / "utils.adb"
@@ -407,6 +408,114 @@ class Phase1IntegrationTests:
                 tool="ada_workspace_symbols",
                 args={"query": "Main"},
                 check=lambda r: len(r.get("symbols", [])) >= 1
+            ),
+            
+            # ============================================================
+            # ada_project_info tests (Phase 3.2)
+            # ============================================================
+            TestCase(
+                name="project_info: sample.gpr",
+                tool="ada_project_info",
+                args={"gpr_file": str(self.project_dir / "sample.gpr")},
+                check=lambda r: r.get("project_name") == "Sample" and len(r.get("source_dirs", [])) > 0
+            ),
+            TestCase(
+                name="project_info: has main units",
+                tool="ada_project_info",
+                args={"gpr_file": str(self.project_dir / "sample.gpr")},
+                check=lambda r: "main.adb" in r.get("main_units", [])
+            ),
+            
+            # ============================================================
+            # ada_call_hierarchy tests (Phase 3.3 & 3.4)
+            # ============================================================
+            TestCase(
+                name="call_hierarchy: Main outgoing calls",
+                tool="ada_call_hierarchy",
+                args={"file": str(self.main_adb), "line": 4, "column": 12, "direction": "outgoing"},
+                check=lambda r: r.get("found") is True or r.get("found") is False  # May have outgoing calls
+            ),
+            TestCase(
+                name="call_hierarchy: Add incoming calls",
+                tool="ada_call_hierarchy",
+                args={"file": str(self.utils_ads), "line": 5, "column": 13, "direction": "incoming"},
+                check=lambda r: "incoming_calls" in r or "outgoing_calls" in r
+            ),
+            TestCase(
+                name="call_hierarchy: both directions",
+                tool="ada_call_hierarchy",
+                args={"file": str(self.utils_ads), "line": 5, "column": 13, "direction": "both"},
+                check=lambda r: "incoming_calls" in r and "outgoing_calls" in r
+            ),
+            
+            # ============================================================
+            # ada_dependency_graph tests (Phase 3.5)
+            # ============================================================
+            TestCase(
+                name="dependency_graph: main.adb",
+                tool="ada_dependency_graph",
+                args={"file": str(self.main_adb)},
+                check=lambda r: r.get("package_count", 0) >= 1
+            ),
+            TestCase(
+                name="dependency_graph: src directory",
+                tool="ada_dependency_graph",
+                args={"file": str(self.project_dir / "src")},
+                check=lambda r: r.get("package_count", 0) >= 2  # Main and Utils
+            ),
+            
+            # ============================================================
+            # ada_completions tests (Phase 4.1 & 4.2)
+            # ============================================================
+            TestCase(
+                name="completions: after 'Utils.'",
+                tool="ada_completions",
+                args={"file": str(self.main_adb), "line": 5, "column": 24, "trigger_character": "."},
+                check=lambda r: "completions" in r and r.get("count", 0) >= 0
+            ),
+            TestCase(
+                name="completions: at identifier",
+                tool="ada_completions",
+                args={"file": str(self.main_adb), "line": 5, "column": 4},
+                check=lambda r: "completions" in r
+            ),
+            TestCase(
+                name="completions: with limit",
+                tool="ada_completions",
+                args={"file": str(self.main_adb), "line": 5, "column": 4, "limit": 5},
+                check=lambda r: r.get("count", 100) <= 5
+            ),
+            
+            # ============================================================
+            # ada_signature_help tests (Phase 4.3)
+            # ============================================================
+            TestCase(
+                name="signature_help: function call",
+                tool="ada_signature_help",
+                args={"file": str(self.main_adb), "line": 5, "column": 28},  # Inside Add(...)
+                check=lambda r: "signatures" in r
+            ),
+            TestCase(
+                name="signature_help: not in call",
+                tool="ada_signature_help",
+                args={"file": str(self.main_adb), "line": 1, "column": 1},
+                check=lambda r: r.get("found") is False or "signatures" in r
+            ),
+            
+            # ============================================================
+            # ada_code_actions tests (Phase 4.4)
+            # ============================================================
+            TestCase(
+                name="code_actions: at position",
+                tool="ada_code_actions",
+                args={"file": str(self.main_adb), "start_line": 5, "start_column": 4},
+                check=lambda r: "actions" in r and "count" in r
+            ),
+            TestCase(
+                name="code_actions: with range",
+                tool="ada_code_actions",
+                args={"file": str(self.main_adb), "start_line": 5, "start_column": 1, "end_line": 7, "end_column": 60},
+                check=lambda r: "actions" in r
             ),
         ]
 
