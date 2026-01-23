@@ -6,9 +6,9 @@ import time
 import pytest
 
 from ada_mcp.utils.cache import (
-    TTLCache,
     CacheEntry,
     CacheStats,
+    TTLCache,
     cached,
     cached_with_file_invalidation,
     clear_all_caches,
@@ -93,13 +93,13 @@ class TestTTLCache:
         """Test that entries expire after TTL."""
         cache = TTLCache[str](ttl_seconds=0.1)
         await cache.set("key", "value")
-        
+
         # Should be cached
         assert await cache.get("key") == "value"
-        
+
         # Wait for expiration
         await asyncio.sleep(0.15)
-        
+
         # Should be expired
         assert await cache.get("key") is None
 
@@ -108,9 +108,9 @@ class TestTTLCache:
         """Test invalidating a specific key."""
         await cache.set("key1", "value1")
         await cache.set("key2", "value2")
-        
+
         await cache.invalidate("key1")
-        
+
         assert await cache.get("key1") is None
         assert await cache.get("key2") == "value2"
 
@@ -120,9 +120,9 @@ class TestTTLCache:
         await cache.set("prefix:a", "value_a")
         await cache.set("prefix:b", "value_b")
         await cache.set("other:c", "value_c")
-        
+
         await cache.invalidate_prefix("prefix:")
-        
+
         assert await cache.get("prefix:a") is None
         assert await cache.get("prefix:b") is None
         assert await cache.get("other:c") == "value_c"
@@ -133,9 +133,9 @@ class TestTTLCache:
         await cache.set("file:/project/src/main.adb:hover:abc", "hover_data")
         await cache.set("file:/project/src/main.adb:def:xyz", "def_data")
         await cache.set("file:/project/src/other.adb:hover:123", "other_data")
-        
+
         await cache.invalidate_file("/project/src/main.adb")
-        
+
         assert await cache.get("file:/project/src/main.adb:hover:abc") is None
         assert await cache.get("file:/project/src/main.adb:def:xyz") is None
         assert await cache.get("file:/project/src/other.adb:hover:123") == "other_data"
@@ -145,9 +145,9 @@ class TestTTLCache:
         """Test clearing all entries."""
         await cache.set("key1", "value1")
         await cache.set("key2", "value2")
-        
+
         await cache.clear()
-        
+
         assert await cache.get("key1") is None
         assert await cache.get("key2") is None
         assert cache.size == 0
@@ -156,10 +156,10 @@ class TestTTLCache:
     async def test_size_property(self, cache):
         """Test size property."""
         assert cache.size == 0
-        
+
         await cache.set("key1", "value1")
         assert cache.size == 1
-        
+
         await cache.set("key2", "value2")
         assert cache.size == 2
 
@@ -167,15 +167,15 @@ class TestTTLCache:
     async def test_stats_tracking(self, cache):
         """Test that statistics are tracked."""
         await cache.set("key1", "value1")
-        
+
         # Hit
         await cache.get("key1")
         assert cache.stats.hits == 1
-        
+
         # Miss
         await cache.get("nonexistent")
         assert cache.stats.misses == 1
-        
+
         # Eviction
         await cache.invalidate("key1")
         assert cache.stats.evictions == 1
@@ -184,15 +184,16 @@ class TestTTLCache:
     async def test_get_or_set_cached(self, cache):
         """Test get_or_set returns cached value."""
         await cache.set("key", "cached_value")
-        
+
         factory_called = False
+
         def factory():
             nonlocal factory_called
             factory_called = True
             return "new_value"
-        
+
         result = await cache.get_or_set("key", factory)
-        
+
         assert result == "cached_value"
         assert not factory_called
 
@@ -200,15 +201,15 @@ class TestTTLCache:
     async def test_get_or_set_computes(self, cache):
         """Test get_or_set computes and caches value."""
         factory_calls = 0
-        
+
         async def factory():
             nonlocal factory_calls
             factory_calls += 1
             return "computed_value"
-        
+
         result1 = await cache.get_or_set("key", factory)
         result2 = await cache.get_or_set("key", factory)
-        
+
         assert result1 == "computed_value"
         assert result2 == "computed_value"
         assert factory_calls == 1  # Only called once
@@ -217,15 +218,15 @@ class TestTTLCache:
     async def test_max_entries_eviction(self):
         """Test that old entries are evicted when max_entries is reached."""
         cache = TTLCache[str](ttl_seconds=100.0, max_entries=3)
-        
+
         await cache.set("key1", "value1")
         await cache.set("key2", "value2")
         await cache.set("key3", "value3")
-        
+
         # Adding 4th entry should trigger eviction of expired entries
         # Since none are expired, all should remain
         await cache.set("key4", "value4")
-        
+
         # At least the new entry should be there
         assert await cache.get("key4") == "value4"
 
@@ -238,7 +239,7 @@ class TestCacheKey:
         key1 = make_cache_key("arg1", "arg2")
         key2 = make_cache_key("arg1", "arg2")
         key3 = make_cache_key("arg1", "arg3")
-        
+
         assert key1 == key2
         assert key1 != key3
 
@@ -246,7 +247,7 @@ class TestCacheKey:
         """Test cache key from kwargs."""
         key1 = make_cache_key(file="/path/to/file", line=10)
         key2 = make_cache_key(line=10, file="/path/to/file")
-        
+
         # Order shouldn't matter
         assert key1 == key2
 
@@ -265,23 +266,23 @@ class TestCachedDecorator:
         """Test that @cached decorator works."""
         cache = TTLCache[dict](ttl_seconds=10.0)
         call_count = 0
-        
+
         @cached(cache, key_prefix="test")
         async def expensive_function(x: int, y: int) -> dict:
             nonlocal call_count
             call_count += 1
             return {"sum": x + y}
-        
+
         # First call - should compute
         result1 = await expensive_function(1, 2)
         assert result1 == {"sum": 3}
         assert call_count == 1
-        
+
         # Second call - should use cache
         result2 = await expensive_function(1, 2)
         assert result2 == {"sum": 3}
         assert call_count == 1  # Not incremented
-        
+
         # Different args - should compute
         result3 = await expensive_function(2, 3)
         assert result3 == {"sum": 5}
@@ -296,24 +297,24 @@ class TestCachedWithFileInvalidation:
         """Test file-based cache invalidation."""
         cache = TTLCache[dict](ttl_seconds=10.0)
         call_count = 0
-        
+
         @cached_with_file_invalidation(cache, key_prefix="hover")
         async def get_hover(file: str, line: int) -> dict:
             nonlocal call_count
             call_count += 1
             return {"file": file, "line": line}
-        
+
         # First call
         result1 = await get_hover("/path/main.adb", 10)
         assert call_count == 1
-        
+
         # Same call - cached
         result2 = await get_hover("/path/main.adb", 10)
         assert call_count == 1
-        
+
         # Invalidate the file
         await cache.invalidate_file("/path/main.adb")
-        
+
         # Should recompute
         result3 = await get_hover("/path/main.adb", 10)
         assert call_count == 2
@@ -326,11 +327,11 @@ class TestGlobalCacheFunctions:
     async def test_get_cache_stats(self):
         """Test getting cache statistics."""
         stats = get_cache_stats()
-        
+
         assert "symbol_cache" in stats
         assert "hover_cache" in stats
         assert "definition_cache" in stats
-        
+
         for cache_stats in stats.values():
             assert "size" in cache_stats
             assert "hits" in cache_stats
