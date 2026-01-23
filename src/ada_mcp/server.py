@@ -22,6 +22,10 @@ from ada_mcp.tools import (
     handle_type_definition,
     handle_workspace_symbols,
 )
+from ada_mcp.tools.build import (
+    handle_alire_info,
+    handle_build,
+)
 from ada_mcp.tools.project import (
     handle_call_hierarchy,
     handle_dependency_graph,
@@ -485,6 +489,49 @@ async def list_tools() -> list[Tool]:
                 "required": ["file"],
             },
         ),
+        # Phase 6: Build & Project Management
+        Tool(
+            name="ada_build",
+            description="Build an Ada project using GPRbuild and return compilation results",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "gpr_file": {
+                        "type": "string",
+                        "description": "Path to GPR project file (auto-detects if not provided)",
+                    },
+                    "target": {
+                        "type": "string",
+                        "description": "Specific build target (main unit name)",
+                    },
+                    "clean": {
+                        "type": "boolean",
+                        "description": "Clean before building",
+                        "default": False,
+                    },
+                    "extra_args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Additional arguments to pass to gprbuild",
+                    },
+                },
+                "required": [],
+            },
+        ),
+        Tool(
+            name="ada_alire_info",
+            description="Get Alire project information from alire.toml",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_dir": {
+                        "type": "string",
+                        "description": "Directory containing alire.toml (defaults to cwd)",
+                    },
+                },
+                "required": [],
+            },
+        ),
     ]
 
 
@@ -634,6 +681,19 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                     file=arguments["file"],
                     line=arguments.get("line"),
                     column=arguments.get("column"),
+                )
+
+            case "ada_build":
+                result = await handle_build(
+                    gpr_file=arguments.get("gpr_file"),
+                    target=arguments.get("target"),
+                    clean=arguments.get("clean", False),
+                    extra_args=arguments.get("extra_args"),
+                )
+
+            case "ada_alire_info":
+                result = await handle_alire_info(
+                    project_dir=arguments.get("project_dir"),
                 )
 
             case _:
