@@ -732,7 +732,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     try:
         client = await get_als_client(file_path=file_path)
     except Exception as e:
-        error_result = {"error": f"Failed to connect to ALS: {e}"}
+        error_result = {
+            "error": f"Failed to connect to ALS: {e}",
+            "context": {"tool": name, "file": file_path},
+            "hint": "Check that the Ada Language Server is installed and ALS_PATH is set correctly",
+        }
         return [TextContent(type="text", text=json.dumps(error_result, indent=2))]
 
     try:
@@ -886,11 +890,14 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 )
 
             case _:
-                result = {"error": f"Unknown tool: {name}"}
+                result = {"error": f"Unknown tool: {name}", "available_tools": "Use list_tools to see available tools"}
 
     except Exception as e:
         logger.exception(f"Error executing tool {name}: {e}")
-        result = {"error": str(e)}
+        result = {
+            "error": str(e),
+            "context": {"tool": name, "arguments": arguments},
+        }
 
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 

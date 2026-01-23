@@ -46,7 +46,11 @@ async def handle_goto_definition(
         )
     except LSPError as e:
         logger.error(f"LSP error in goto_definition: {e}")
-        return {"found": False, "error": e.message}
+        return {
+            "found": False,
+            "error": e.message,
+            "context": {"file": file, "line": line, "column": column},
+        }
 
     if not result:
         return {"found": False}
@@ -124,7 +128,12 @@ async def handle_find_references(
         )
     except LSPError as e:
         logger.error(f"LSP error in find_references: {e}")
-        return {"references": [], "count": 0, "error": e.message}
+        return {
+            "references": [],
+            "count": 0,
+            "error": e.message,
+            "context": {"file": file, "line": line, "column": column},
+        }
 
     if not result:
         return {"references": [], "count": 0}
@@ -195,7 +204,11 @@ async def handle_type_definition(
         )
     except LSPError as e:
         logger.error(f"LSP error in type_definition: {e}")
-        return {"found": False, "error": e.message}
+        return {
+            "found": False,
+            "error": e.message,
+            "context": {"file": file, "line": line, "column": column},
+        }
 
     if not result:
         return {"found": False}
@@ -272,7 +285,11 @@ async def handle_implementation(
         )
     except LSPError as e:
         logger.error(f"LSP error in implementation: {e}")
-        return {"found": False, "error": e.message}
+        return {
+            "found": False,
+            "error": e.message,
+            "context": {"file": file, "line": line, "column": column},
+        }
 
     if not result:
         return {"found": False}
@@ -345,7 +362,11 @@ async def handle_hover(
         )
     except LSPError as e:
         logger.error(f"LSP error in hover: {e}")
-        return {"found": False, "error": e.message}
+        return {
+            "found": False,
+            "error": e.message,
+            "context": {"file": file, "line": line, "column": column},
+        }
 
     if not result:
         return {"found": False}

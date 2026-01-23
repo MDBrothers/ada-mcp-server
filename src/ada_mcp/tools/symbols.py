@@ -38,7 +38,11 @@ async def handle_document_symbols(
         )
     except LSPError as e:
         logger.error(f"LSP error in document_symbols: {e}")
-        return {"symbols": [], "error": e.message}
+        return {
+            "symbols": [],
+            "error": e.message,
+            "context": {"file": file},
+        }
 
     if not result:
         return {"symbols": []}
@@ -81,7 +85,11 @@ async def handle_workspace_symbols(
         )
     except LSPError as e:
         logger.error(f"LSP error in workspace_symbols: {e}")
-        return {"symbols": [], "error": e.message}
+        return {
+            "symbols": [],
+            "error": e.message,
+            "context": {"query": query, "kind": kind},
+        }
 
     if not result:
         return {"symbols": []}
