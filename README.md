@@ -62,7 +62,7 @@ python --version  # Should be 3.11 or higher
 pip install ada-mcp-server
 
 # From source
-git clone https://github.com/ada-mcp/ada-mcp-server
+git clone https://github.com/MDBrothers/ada-mcp-server
 cd ada-mcp-server
 pip install -e .
 
