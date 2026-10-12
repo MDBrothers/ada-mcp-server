@@ -67,7 +67,7 @@ cd ada-mcp-server
 pip install -e .
 
 # With uvx (isolated environment)
-uvx ada-mcp-server
+uvx --from ada-mcp-server ada-mcp
 ```
 
 ## Quick Start
@@ -97,7 +97,7 @@ Add to your VS Code `settings.json`:
   "mcpServers": {
     "ada": {
       "command": "uvx",
-      "args": ["ada-mcp-server"],
+      "args": ["--from", "ada-mcp-server", "ada-mcp"],
       "env": {
         "ALS_PATH": "ada_language_server",
         "ADA_PROJECT_FILE": "project.gpr"
